@@ -1,0 +1,51 @@
+import json
+import os
+import re
+
+def split_ndjson_file(input_file, output_dir, chunk_size=100000):  # Renamed for clarity
+    """Splits a large NDJSON file into smaller files."""
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    with open(input_file, 'r') as f:
+        file_counter = 0
+        sample_counter = 0
+        current_chunk = []
+
+        for line in f:
+            # Important: Remove or replace MongoDB-specific syntax before parsing
+            line = re.sub(r'ObjectId\("([^"]*)"\)', r'"\1"', line)
+            line = line.replace('ISODate("', '"').replace('")', '"')
+            line = line.replace('NumberLong("', '"').replace('")', '"')
+
+            try:
+                # *** KEY CHANGE:  Process each line individually ***
+                if line.strip(): # Check if line is not empty
+                    data = json.loads(line)
+                    current_chunk.append(data)
+                    sample_counter += 1
+
+                    if sample_counter == chunk_size:
+                        output_file_path = os.path.join(output_dir, f"chunk_{file_counter}.json")
+                        with open(output_file_path, 'w') as outfile:
+                            json.dump(current_chunk, outfile, indent=4, ensure_ascii=False)  # Save as *valid* JSON
+
+                        file_counter += 1
+                        sample_counter = 0
+                        current_chunk = []
+
+            except json.JSONDecodeError as e:
+                print(f"Skipping invalid JSON line: {line.strip()}")
+                print(f"Error details: {e}")
+
+        # Save any remaining data
+        if current_chunk:
+                output_file_path = os.path.join(output_dir, f"chunk_{file_counter}.json")
+                with open(output_file_path, 'w') as outfile:
+                    json.dump(current_chunk, outfile, indent=4, ensure_ascii=False)  # Save the last chunk
+
+
+# Example usage (replace with your paths)
+input_file = "/Users/a123/Documents/data/fine/administrative_punishment.json"
+output_dir = "/Users/a123/Documents/data/fine/output_json_files"
+split_ndjson_file(input_file, output_dir)  # Call the modified function
